@@ -43,6 +43,7 @@ int Client::Connect()
 	
 	if (strcmp(buffer, "Sorry, but server is full") == 0)
 	{
+		closesocket(connection);
 		WSACleanup();
 		return 1;
 	}	
@@ -52,11 +53,17 @@ int Client::Connect()
 		std::cout << "Enter your command: ";
 		std::getline(std::cin, message);
 		message.append("\r");
-		send(connection, message.c_str(), message.length(), NULL);
-		memset(buffer, '\0', sizeof(buffer));
-		if (recv(connection, buffer, sizeof(buffer) - 1, NULL) == -1)
+		if (send(connection, message.c_str(), message.length(), NULL) == -1)
 		{
-			std::string message = "You were disconnected because of timeout or server was turned off";
+			message = "Server was turned off";
+			std::cout << message << std::endl;
+			break;
+		}
+		memset(buffer, '\0', sizeof(buffer));
+		int r = 0;
+		if ((r = recv(connection, buffer, sizeof(buffer) - 1, NULL)) == -1)
+		{
+			message = "You were disconnected because of timeout";
 			std::cout << message << std::endl;
 			break;
 		}
