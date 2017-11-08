@@ -21,7 +21,7 @@ class FileProcessing
 	bool IsReversedFile(std::string file_name);
 	bool FileIsAvailable(std::string file_name);
 	void InitHashMap();
-	
+	void SetFileAvailable(std::string file_name, bool value);
 public:
 	FileProcessing(std::string directory_name);
 	~FileProcessing();

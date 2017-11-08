@@ -32,11 +32,7 @@ std::string FileProcessing::Select(std::string file_name)
 		std::unique_lock<std::mutex> u_lock(mtx);
 		condit_var.wait(u_lock);
 	}
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = false;
-	}
+	SetFileAvailable(file_name, false);
 	std::string str = "";
 	std::string line = "";
 	while (std::getline(inputFile, line))
@@ -45,12 +41,8 @@ std::string FileProcessing::Select(std::string file_name)
 			str.append(line + "\r\n");
 	}
 	inputFile.close();
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = true;
-		condit_var.notify_all();
-	}
+	SetFileAvailable(file_name, true);
+	condit_var.notify_all();
 	return str;
 }
 
@@ -68,11 +60,7 @@ std::string FileProcessing::Insert(std::string file_name, std::string value, boo
 		std::unique_lock<std::mutex> u_lock(mtx);
 		condit_var.wait(u_lock);
 	}
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = false;
-	}
+	SetFileAvailable(file_name, false);
 	outputFile.open(directory_name + file_name, std::ios::app);
 	if (outputFile.fail())
 	{
@@ -81,12 +69,8 @@ std::string FileProcessing::Insert(std::string file_name, std::string value, boo
 	value.append("\n");
 	outputFile << value;
 	outputFile.close();
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = true;
-		condit_var.notify_all();
-	}
+	SetFileAvailable(file_name, true);
+	condit_var.notify_all();
 	return "OK (Insert)";
 }
 
@@ -105,11 +89,7 @@ std::string FileProcessing::Update(std::string file_name, std::string value, std
 		std::unique_lock<std::mutex> u_lock(mtx);
 		condit_var.wait(u_lock);
 	}
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = false;
-	}
+	SetFileAvailable(file_name, false);
 	std::string str = "";
 	std::string line = "";
 	while (std::getline(inputFile, line))
@@ -132,12 +112,8 @@ std::string FileProcessing::Update(std::string file_name, std::string value, std
 	outputFile.open(directory_name + file_name, std::ios::trunc);
 	outputFile << str;
 	outputFile.close();
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = true;
-		condit_var.notify_all();
-	}
+	SetFileAvailable(file_name, true);
+	condit_var.notify_all();
 	return "OK (Update)";
 }
 
@@ -169,11 +145,7 @@ std::string FileProcessing::Truncate(std::string file_name)
 		std::unique_lock<std::mutex> u_lock(mtx);
 		condit_var.wait(u_lock);
 	}
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = false;
-	}
+	SetFileAvailable(file_name, false);
 	outputFile.open(directory_name + file_name, std::ios::trunc);
 	std::string result;
 	if (outputFile.fail())
@@ -183,12 +155,8 @@ std::string FileProcessing::Truncate(std::string file_name)
 		outputFile.close();
 		result = "OK (Truncate)";
 	}
-	{
-		std::unique_lock<std::mutex> locker(mtx);
-		bool* value = hash_table->find(file_name)->second;
-		*value = true;
-		condit_var.notify_all();
-	}
+	SetFileAvailable(file_name, true);
+	condit_var.notify_all();
 	return result;
 }
 
@@ -277,4 +245,11 @@ void FileProcessing::Log(std::string input, std::string ip)
 		outputFile << value;
 		outputFile.close();
 	}
+}
+
+void FileProcessing::SetFileAvailable(std::string file_name, bool value)
+{
+	std::unique_lock<std::mutex> locker(mtx);
+	bool* is_available = hash_table->find(file_name)->second;
+	*is_available = value;
 }
