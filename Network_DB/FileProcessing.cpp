@@ -1,8 +1,5 @@
 #include "FileProcessing.h"
 
-#define DELAY 100
-
-
 FileProcessing::FileProcessing(std::string directory_name)
 {
 	this->directory_name = directory_name + "\\";
@@ -10,8 +7,8 @@ FileProcessing::FileProcessing(std::string directory_name)
 	std::ofstream outFile;
 	outFile.open(this->directory_name + reversed_file, std::ios::app);
 	outFile.close();
-	hash_table = new std::unordered_map<std::string, SpinLock*>();
-	hash_table->insert(std::make_pair(reversed_file, new SpinLock));
+	hash_table = new std::unordered_map<std::string, bool*>();
+	hash_table->insert(std::make_pair(reversed_file, new bool(true)));
 	InitHashMap();
 }
 
@@ -30,11 +27,16 @@ std::string FileProcessing::Select(std::string file_name)
 	{
 		return "Error (Select). File does not exist";
 	}
-	while (!FileIsAvailable(file_name, false))
-		Sleep(DELAY);
-	std::unique_lock<std::mutex> locker(mtx);
-	hash_table->find(file_name)->second->for_reading += 1;
-	locker.unlock();
+	while (!FileIsAvailable(file_name))
+	{
+		std::unique_lock<std::mutex> u_lock(mtx);
+		condit_var.wait(u_lock);
+	}
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = false;
+	}
 	std::string str = "";
 	std::string line = "";
 	while (std::getline(inputFile, line))
@@ -43,9 +45,12 @@ std::string FileProcessing::Select(std::string file_name)
 			str.append(line + "\r\n");
 	}
 	inputFile.close();
-	locker.lock();
-	hash_table->find(file_name)->second->for_reading -= 1;
-	locker.unlock();
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = true;
+		condit_var.notify_all();
+	}
 	return str;
 }
 
@@ -58,11 +63,16 @@ std::string FileProcessing::Insert(std::string file_name, std::string value, boo
 		return "Error (Insert). File does not exist";
 	}
 	std::ofstream outputFile;
-	while (!FileIsAvailable(file_name, true))
-		Sleep(DELAY);
-	std::unique_lock<std::mutex> locker(mtx);
-	hash_table->find(file_name)->second->for_writting = true;
-	locker.unlock();
+	while (!FileIsAvailable(file_name))
+	{
+		std::unique_lock<std::mutex> u_lock(mtx);
+		condit_var.wait(u_lock);
+	}
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = false;
+	}
 	outputFile.open(directory_name + file_name, std::ios::app);
 	if (outputFile.fail())
 	{
@@ -71,9 +81,12 @@ std::string FileProcessing::Insert(std::string file_name, std::string value, boo
 	value.append("\n");
 	outputFile << value;
 	outputFile.close();
-	locker.lock();
-	hash_table->find(file_name)->second->for_writting = false;
-	locker.unlock();
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = true;
+		condit_var.notify_all();
+	}
 	return "OK (Insert)";
 }
 
@@ -87,11 +100,16 @@ std::string FileProcessing::Update(std::string file_name, std::string value, std
 	{
 		return "Error (Update). File does not exist";
 	}
-	while (!FileIsAvailable(file_name, true))
-		Sleep(DELAY);
-	std::unique_lock<std::mutex> locker(mtx);
-	hash_table->find(file_name)->second->for_writting = true;
-	locker.unlock();
+	while (!FileIsAvailable(file_name))
+	{
+		std::unique_lock<std::mutex> u_lock(mtx);
+		condit_var.wait(u_lock);
+	}
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = false;
+	}
 	std::string str = "";
 	std::string line = "";
 	while (std::getline(inputFile, line))
@@ -114,9 +132,12 @@ std::string FileProcessing::Update(std::string file_name, std::string value, std
 	outputFile.open(directory_name + file_name, std::ios::trunc);
 	outputFile << str;
 	outputFile.close();
-	locker.lock();
-	hash_table->find(file_name)->second->for_writting = false;
-	locker.unlock();
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = true;
+		condit_var.notify_all();
+	}
 	return "OK (Update)";
 }
 
@@ -143,11 +164,16 @@ std::string FileProcessing::Truncate(std::string file_name)
 		return "Error (Truncate). File does not exist";
 	}
 	std::ofstream outputFile;
-	while (!FileIsAvailable(file_name, true))
-		Sleep(DELAY);
-	std::unique_lock<std::mutex> locker(mtx);
-	hash_table->find(file_name)->second->for_writting = true;
-	locker.unlock();
+	while (!FileIsAvailable(file_name))
+	{
+		std::unique_lock<std::mutex> u_lock(mtx);
+		condit_var.wait(u_lock);
+	}
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = false;
+	}
 	outputFile.open(directory_name + file_name, std::ios::trunc);
 	std::string result;
 	if (outputFile.fail())
@@ -157,9 +183,12 @@ std::string FileProcessing::Truncate(std::string file_name)
 		outputFile.close();
 		result = "OK (Truncate)";
 	}
-	locker.lock();
-	hash_table->find(file_name)->second->for_writting = false;
-	locker.unlock();
+	{
+		std::unique_lock<std::mutex> locker(mtx);
+		bool* value = hash_table->find(file_name)->second;
+		*value = true;
+		condit_var.notify_all();
+	}
 	return result;
 }
 
@@ -189,7 +218,7 @@ std::string FileProcessing::Create(std::string file_name)
 	{
 		return "Error (Create). File already exists";
 	}
-	hash_table->insert(std::make_pair(file_name, new SpinLock));
+	hash_table->insert(std::make_pair(file_name, new bool(true)));
 	std::ofstream outputFile;
 	outputFile.open(directory_name + file_name);
 	outputFile.close();
@@ -208,13 +237,11 @@ bool FileProcessing::IsReversedFile(std::string file_name)
 	return strcmp(file_name.c_str(), reversed_file.c_str()) == 0;
 }
 
-bool FileProcessing::FileIsAvailable(std::string file_name, bool for_writting)
+bool FileProcessing::FileIsAvailable(std::string file_name)
 {
 	std::unique_lock<std::mutex> locker(mtx);
-	SpinLock* file_info = hash_table->find(file_name)->second;
-	if (for_writting)
-		return file_info->for_reading == 0 && !file_info->for_writting;
-	return !file_info->for_writting;
+	bool* is_available = hash_table->find(file_name)->second;
+	return *is_available;
 }
 
 void FileProcessing::InitHashMap()
@@ -226,7 +253,7 @@ void FileProcessing::InitHashMap()
 	{
 		if (token != "")
 		{
-			hash_table->insert(std::make_pair(token.erase(token.find("\r")), new SpinLock));
+			hash_table->insert(std::make_pair(token.erase(token.find("\r")), new bool(true)));
 		}
 	}
 }

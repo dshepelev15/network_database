@@ -8,22 +8,18 @@
 #include <mutex>
 #include <windows.h>
 #include <time.h>
-
-struct SpinLock
-{
-	unsigned short for_reading = 0;
-	bool for_writting = false;
-};
+#include <condition_variable>
 
 class FileProcessing
 {
 	std::string reversed_file;
 	std::string directory_name;
 	std::mutex mtx, log_mtx;
-	std::unordered_map<std::string, SpinLock*>* hash_table;
+	std::condition_variable condit_var;
+	std::unordered_map<std::string, bool*>* hash_table;
 	
 	bool IsReversedFile(std::string file_name);
-	bool FileIsAvailable(std::string file_name, bool for_writting);
+	bool FileIsAvailable(std::string file_name);
 	void InitHashMap();
 	
 public:
