@@ -149,11 +149,13 @@ void Server::HandleClientConnection(ProcessingThread* proc_thread, std::string i
 		{
 			memset(buffer, '\0', sizeof(buffer));
 			int answer = recv(proc_thread->connection, buffer, sizeof(buffer), NULL);
-			if (answer == -1) 
+			if (answer == -1 || answer == 0) 
 			{
 				proc_thread->is_active = false;
-				proc_thread->need_to_close = true;			
-				std::cout << "Timeout client with ip " << ip << std::endl;
+				proc_thread->need_to_close = true;
+				std::string error_msg;
+				error_msg = (answer == 0) ? "Client was turned off" : "Timeout client with ip " + ip;
+				std::cout << error_msg << std::endl;
 				goto THREAD_EXIT;
 			}
 			message.append(buffer);
